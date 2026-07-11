@@ -1,0 +1,15 @@
+{
+  "name": "자료 서가",
+  "short_name": "서가",
+  "description": "프로젝트별로 정리하는 개인 자료 아카이브",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#EDE6D3",
+  "theme_color": "#EDE6D3",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}
