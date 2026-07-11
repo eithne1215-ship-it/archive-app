@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>자료 서가</title>
+<meta name="description" content="프로젝트별로 정리하는 개인 자료 아카이브" />
+<meta name="theme-color" content="#EDE6D3" />
+<link rel="manifest" href="manifest.json" />
+<link rel="apple-touch-icon" href="icon.svg" />
+<link rel="icon" href="icon.svg" type="image/svg+xml" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="자료 서가" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Work+Sans:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div id="app"></div>
+
+<!-- 노트 편집 템플릿 -->
+<template id="tpl-editor">
+  <div class="min-h">
+    <div class="wrap editor-wrap">
+      <div class="editor-top">
+        <button class="btn-back" data-action="back">← 서가로</button>
+        <button class="btn-delete" data-action="delete" title="삭제">🗑</button>
+      </div>
+
+      <button class="cover-btn" data-action="pick-cover">
+        <img class="cover-img" style="display:none" />
+        <div class="cover-empty">
+          <span class="cover-icon">🖼</span>
+          <span class="mono small">표지 이미지 추가</span>
+        </div>
+      </button>
+      <input type="file" accept="image/*" class="cover-input" hidden />
+      <button class="link-remove-cover" data-action="remove-cover" style="display:none">표지 제거</button>
+
+      <div class="field-label mono">서가</div>
+      <div class="project-chip-row" data-role="project-chips"></div>
+
+      <input class="title-input font-display" type="text" placeholder="제목" />
+
+      <div class="tag-chip-row" data-role="tag-chips"></div>
+      <div class="tag-input-wrap">
+        <span class="tag-icon">#</span>
+        <input class="tag-input" type="text" placeholder="태그 입력 후 Enter" />
+      </div>
+
+      <textarea class="content-input" rows="12" placeholder="내용을 적어보세요. 설정, 자료, 인용, 메모 뭐든 좋아요."></textarea>
+
+      <button class="btn-save" data-action="save">저장하기</button>
+    </div>
+  </div>
+</template>
+
+<script src="app.js"></script>
+</body>
+</html>
