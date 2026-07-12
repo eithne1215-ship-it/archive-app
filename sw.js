@@ -1,4 +1,4 @@
-var CACHE_NAME = "archive-cache-v1";
+var CACHE_NAME = "archive-cache-v2";
 var CORE_ASSETS = [
   "./",
   "./index.html",
@@ -34,7 +34,6 @@ self.addEventListener("fetch", function (event) {
     caches.match(req).then(function (cached) {
       var networkFetch = fetch(req)
         .then(function (res) {
-          // cache successful same-origin or opaque (e.g. font) responses
           if (res && (res.status === 200 || res.type === "opaque")) {
             var resClone = res.clone();
             caches.open(CACHE_NAME).then(function (cache) { cache.put(req, resClone); });
@@ -42,7 +41,6 @@ self.addEventListener("fetch", function (event) {
           return res;
         })
         .catch(function () { return cached; });
-      // cache-first for core app shell, stale-while-revalidate otherwise
       return cached || networkFetch;
     })
   );
