@@ -3,7 +3,10 @@
 
   var PROJECTS_KEY = "archive_projects";
   var NOTES_KEY = "archive_notes";
+  var SORT_KEY = "archive_sort";
+  var FONTSIZE_KEY = "archive_fontsize";
   var SHELF_COLORS = ["#5C7A72", "#A8785A", "#7A6A9C", "#4B5D3A", "#8A6A4A", "#6B7D8C"];
+  var UNDO_TIMEOUT_MS = 6000;
 
   var state = {
     projects: [],
@@ -11,11 +14,15 @@
     activeProjectId: "all",
     query: "",
     activeTag: null,
-    view: "list", // "list" | "editor"
+    view: "list",
     editingNote: null,
     showNewProject: false,
     confirmDeleteProjectId: null,
+    sortBy: "recent",
+    fontSize: "medium",
   };
+
+  var pendingUndo = null;
 
   function uid() {
     return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
@@ -32,6 +39,14 @@
     } catch (e) {
       state.notes = [];
     }
+    state.sortBy = localStorage.getItem(SORT_KEY) || "recent";
+    state.fontSize = localStorage.getItem(FONTSIZE_KEY) || "medium";
+    applyFontSizeClass();
+  }
+
+  function applyFontSizeClass() {
+    document.body.classList.remove("fs-small", "fs-medium", "fs-large");
+    document.body.classList.add("fs-" + state.fontSize);
   }
 
   function persist() {
@@ -68,7 +83,15 @@
         );
       });
     }
-    list.sort(function (a, b) { return (b.updatedAt || 0) - (a.updatedAt || 0); });
+    list.sort(function (a, b) {
+      if (state.sortBy === "title") {
+        return a.title.localeCompare(b.title, "ko");
+      }
+      if (state.sortBy === "oldest") {
+        return (a.updatedAt || 0) - (b.updatedAt || 0);
+      }
+      return (b.updatedAt || 0) - (a.updatedAt || 0);
+    });
     return list;
   }
 
@@ -85,20 +108,17 @@
     return e;
   }
 
-  // ---------- Rendering: List view ----------
   function renderList() {
     var app = document.getElementById("app");
     app.innerHTML = "";
 
     var wrap = el("div", "wrap");
 
-    // Header
     var header = el("div", "header");
     header.appendChild(el("div", "eyebrow", "PERSONAL ARCHIVE"));
     header.appendChild(el("h1", "h1 font-display", "자료 서가"));
     wrap.appendChild(header);
 
-    // Search
     var searchWrap = el("div", "search-wrap");
     var searchIcon = el("span", "search-icon", "\uD83D\uDD0D");
     var searchInput = el("input", "search-input");
@@ -113,7 +133,6 @@
     searchWrap.appendChild(searchInput);
     wrap.appendChild(searchWrap);
 
-    // Shelf tabs
     var shelfRow = el("div", "shelf-row");
     shelfRow.id = "shelf-row";
     wrap.appendChild(shelfRow);
@@ -149,7 +168,6 @@
       wrap.appendChild(cbox);
     }
 
-    // Tag filter row
     var tags = allTags();
     if (tags.length > 0) {
       var tagRow = el("div", "tag-filter-row");
@@ -164,17 +182,38 @@
       wrap.appendChild(tagRow);
     }
 
-    // Note grid container
+    var sortRow = el("div", "sort-row");
+    var sortLabel = el("span", "mono small sort-label", "정렬");
+    var sortSelect = document.createElement("select");
+    sortSelect.className = "sort-select mono";
+    [
+      ["recent", "최근 수정순"],
+      ["oldest", "오래된순"],
+      ["title", "제목순"],
+    ].forEach(function (opt) {
+      var o = document.createElement("option");
+      o.value = opt[0];
+      o.textContent = opt[1];
+      if (state.sortBy === opt[0]) o.selected = true;
+      sortSelect.appendChild(o);
+    });
+    sortSelect.addEventListener("change", function (e) {
+      state.sortBy = e.target.value;
+      localStorage.setItem(SORT_KEY, state.sortBy);
+      renderNoteGridOnly();
+    });
+    sortRow.appendChild(sortLabel);
+    sortRow.appendChild(sortSelect);
+    wrap.appendChild(sortRow);
+
     var gridHolder = el("div");
     gridHolder.id = "grid-holder";
     wrap.appendChild(gridHolder);
 
-    // FAB
     var fab = el("button", "fab", "<span>&#43;</span> 새 카드");
     fab.addEventListener("click", createNote);
     wrap.appendChild(fab);
 
-    // Settings row (backup)
     var settingsRow = el("div", "settings-row");
     var exportBtn = el("button", "settings-link mono", "백업 내보내기");
     exportBtn.addEventListener("click", exportBackup);
@@ -183,6 +222,26 @@
     settingsRow.appendChild(exportBtn);
     settingsRow.appendChild(importBtn);
     wrap.appendChild(settingsRow);
+
+    var fontRow = el("div", "font-size-row");
+    fontRow.appendChild(el("span", "mono small sort-label", "글자 크기"));
+    var fontGroup = el("div", "font-size-group");
+    [
+      ["small", "가"],
+      ["medium", "가"],
+      ["large", "가"],
+    ].forEach(function (opt) {
+      var btn = el("button", "font-size-btn font-size-btn-" + opt[0] + (state.fontSize === opt[0] ? " active" : ""), opt[1]);
+      btn.addEventListener("click", function () {
+        state.fontSize = opt[0];
+        localStorage.setItem(FONTSIZE_KEY, state.fontSize);
+        applyFontSizeClass();
+        renderList();
+      });
+      fontGroup.appendChild(btn);
+    });
+    fontRow.appendChild(fontGroup);
+    wrap.appendChild(fontRow);
 
     var importInput = el("input");
     importInput.type = "file";
@@ -273,7 +332,6 @@
     holder.appendChild(grid);
   }
 
-  // ---------- Project actions ----------
   function createProject(name) {
     var trimmed = (name || "").trim();
     if (!trimmed) return;
@@ -286,15 +344,26 @@
   }
 
   function deleteProject(id) {
+    var idx = state.projects.findIndex(function (p) { return p.id === id; });
+    if (idx === -1) return;
+    var removedProject = state.projects[idx];
+    var removedNotes = state.notes.filter(function (n) { return n.projectId === id; });
+
     state.projects = state.projects.filter(function (p) { return p.id !== id; });
     state.notes = state.notes.filter(function (n) { return n.projectId !== id; });
     if (state.activeProjectId === id) state.activeProjectId = "all";
     state.confirmDeleteProjectId = null;
     persist();
     renderList();
+
+    showUndoToast('"' + removedProject.name + '" 서가를 삭제했어요', function () {
+      state.projects.splice(idx, 0, removedProject);
+      state.notes = state.notes.concat(removedNotes);
+      persist();
+      renderList();
+    });
   }
 
-  // ---------- Note actions ----------
   function createNote() {
     var defaultProject = state.activeProjectId !== "all" ? state.activeProjectId : (state.projects[0] ? state.projects[0].id : null);
     var n = { id: uid(), projectId: defaultProject, title: "", cover: null, content: "", tags: [], updatedAt: Date.now() };
@@ -327,12 +396,20 @@
   }
 
   function deleteCurrentNote(id) {
+    var idx = state.notes.findIndex(function (n) { return n.id === id; });
+    if (idx === -1) return;
+    var removedNote = state.notes[idx];
     state.notes = state.notes.filter(function (n) { return n.id !== id; });
     persist();
     closeEditor();
+
+    showUndoToast('"' + (removedNote.title || "제목 없음") + '" 카드를 삭제했어요', function () {
+      state.notes.splice(idx, 0, removedNote);
+      persist();
+      renderList();
+    });
   }
 
-  // ---------- Editor rendering ----------
   function renderEditor() {
     var app = document.getElementById("app");
     app.innerHTML = "";
@@ -347,7 +424,7 @@
 
     var deleteBtn = node.querySelector('[data-action="delete"]');
     deleteBtn.addEventListener("click", function () {
-      if (confirm("이 카드를 삭제할까요?")) deleteCurrentNote(noteState.id);
+      deleteCurrentNote(noteState.id);
     });
 
     var coverBtn = node.querySelector('[data-action="pick-cover"]');
@@ -386,7 +463,6 @@
       refreshCover();
     });
 
-    // Project chips
     var chipRow = node.querySelector('[data-role="project-chips"]');
     function refreshProjectChips() {
       chipRow.innerHTML = "";
@@ -414,12 +490,10 @@
     }
     refreshProjectChips();
 
-    // Title
     var titleInput = node.querySelector(".title-input");
     titleInput.value = noteState.title;
     titleInput.addEventListener("input", function (e) { noteState.title = e.target.value; });
 
-    // Tags
     var tagChipRow = node.querySelector('[data-role="tag-chips"]');
     var tagInput = node.querySelector(".tag-input");
     function refreshTagChips() {
@@ -455,19 +529,44 @@
     });
     tagInput.addEventListener("blur", addTagFromInput);
 
-    // Content
     var contentInput = node.querySelector(".content-input");
     contentInput.value = noteState.content;
     contentInput.addEventListener("input", function (e) { noteState.content = e.target.value; });
 
-    // Save
     var saveBtn = node.querySelector('[data-action="save"]');
     saveBtn.addEventListener("click", function () { saveCurrentNote(noteState); });
 
     app.appendChild(root);
   }
 
-  // ---------- Backup ----------
+  function showUndoToast(message, undoFn) {
+    var existing = document.getElementById("undo-toast");
+    if (existing) existing.remove();
+    if (pendingUndo && pendingUndo.timerId) clearTimeout(pendingUndo.timerId);
+
+    var toast = el("div", "undo-toast");
+    toast.id = "undo-toast";
+    var msg = el("span", "undo-toast-msg", message);
+    var undoBtn = el("button", "undo-toast-btn mono", "되돌리기");
+    undoBtn.addEventListener("click", function () {
+      clearTimeout(pendingUndo.timerId);
+      pendingUndo = null;
+      toast.remove();
+      undoFn();
+    });
+    toast.appendChild(msg);
+    toast.appendChild(undoBtn);
+    document.body.appendChild(toast);
+
+    var timerId = setTimeout(function () {
+      var t = document.getElementById("undo-toast");
+      if (t) t.remove();
+      pendingUndo = null;
+    }, UNDO_TIMEOUT_MS);
+
+    pendingUndo = { timerId: timerId };
+  }
+
   function exportBackup() {
     var data = { projects: state.projects, notes: state.notes, exportedAt: new Date().toISOString() };
     var blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
@@ -506,7 +605,6 @@
     reader.readAsText(file);
   }
 
-  // ---------- Init ----------
   function init() {
     load();
     renderList();
