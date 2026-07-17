@@ -108,6 +108,12 @@
     return e;
   }
 
+  function escapeHtml(str) {
+    var d = document.createElement("div");
+    d.textContent = str == null ? "" : str;
+    return d.innerHTML;
+  }
+
   function renderList() {
     var app = document.getElementById("app");
     app.innerHTML = "";
@@ -316,7 +322,10 @@
         projTag.style.color = proj.color;
         body.appendChild(projTag);
       }
-      body.appendChild(el("div", "note-title font-display", n.title || "제목 없음"));
+      body.appendChild(el("div", "note-title font-display", escapeHtml(n.title) || "제목 없음"));
+      if (n.content && n.content.trim()) {
+        body.appendChild(el("div", "note-preview", escapeHtml(n.content.trim())));
+      }
       if (n.tags && n.tags.length) {
         var tagsRow = el("div", "note-tags");
         n.tags.slice(0, 3).forEach(function (t) {
