@@ -20,6 +20,8 @@
     confirmDeleteProjectId: null,
     sortBy: "recent",
     fontSize: "medium",
+    selectMode: false,
+    selectedIds: [],
   };
 
   var pendingUndo = null;
@@ -125,6 +127,7 @@
     header.appendChild(el("h1", "h1 font-display", "자료 서가"));
     wrap.appendChild(header);
 
+    var searchRow = el("div", "search-row");
     var searchWrap = el("div", "search-wrap");
     var searchIcon = el("span", "search-icon", "\uD83D\uDD0D");
     var searchInput = el("input", "search-input");
@@ -137,7 +140,16 @@
     });
     searchWrap.appendChild(searchIcon);
     searchWrap.appendChild(searchInput);
-    wrap.appendChild(searchWrap);
+    searchRow.appendChild(searchWrap);
+
+    var selectToggleBtn = el("button", "select-toggle-btn mono", state.selectMode ? "취소" : "선택");
+    selectToggleBtn.addEventListener("click", function () {
+      state.selectMode = !state.selectMode;
+      state.selectedIds = [];
+      renderList();
+    });
+    searchRow.appendChild(selectToggleBtn);
+    wrap.appendChild(searchRow);
 
     var shelfRow = el("div", "shelf-row");
     shelfRow.id = "shelf-row";
@@ -216,9 +228,30 @@
     gridHolder.id = "grid-holder";
     wrap.appendChild(gridHolder);
 
-    var fab = el("button", "fab", "<span>&#43;</span> 새 카드");
-    fab.addEventListener("click", createNote);
-    wrap.appendChild(fab);
+    if (state.selectMode) {
+      var selectBar = el("div", "select-bar");
+      var countLabel = el("span", "select-count mono", state.selectedIds.length + "개 선택됨");
+      var selectActions = el("div", "select-actions");
+      var selectAllBtn = el("button", "select-bar-btn mono", "전체 선택");
+      selectAllBtn.addEventListener("click", function () {
+        var visIds = visibleNotes().map(function (n) { return n.id; });
+        var allSelected = visIds.length > 0 && visIds.every(function (id) { return state.selectedIds.indexOf(id) !== -1; });
+        state.selectedIds = allSelected ? [] : visIds;
+        renderList();
+      });
+      var deleteSelectedBtn = el("button", "select-bar-btn select-bar-delete mono", "삭제");
+      deleteSelectedBtn.disabled = state.selectedIds.length === 0;
+      deleteSelectedBtn.addEventListener("click", deleteSelectedNotes);
+      selectActions.appendChild(selectAllBtn);
+      selectActions.appendChild(deleteSelectedBtn);
+      selectBar.appendChild(countLabel);
+      selectBar.appendChild(selectActions);
+      wrap.appendChild(selectBar);
+    } else {
+      var fab = el("button", "fab", "<span>&#43;</span> 새 카드");
+      fab.addEventListener("click", createNote);
+      wrap.appendChild(fab);
+    }
 
     var settingsRow = el("div", "settings-row");
     var exportBtn = el("button", "settings-link mono", "백업 내보내기");
@@ -305,7 +338,8 @@
     var grid = el("div", "note-grid");
     notes.forEach(function (n) {
       var proj = projectById(n.projectId);
-      var card = el("button", "note-card");
+      var isSelected = state.selectedIds.indexOf(n.id) !== -1;
+      var card = el("button", "note-card" + (isSelected ? " selected" : ""));
       var cover = el("div", "note-cover");
       if (n.cover) {
         var img = document.createElement("img");
@@ -313,6 +347,9 @@
         cover.appendChild(img);
       } else {
         cover.appendChild(el("span", "note-cover-placeholder", "\uD83D\uDDBC"));
+      }
+      if (state.selectMode) {
+        cover.appendChild(el("span", "select-check" + (isSelected ? " checked" : ""), isSelected ? "\u2713" : ""));
       }
       card.appendChild(cover);
 
@@ -335,10 +372,41 @@
       }
       card.appendChild(body);
 
-      card.addEventListener("click", function () { openEditor(n); });
+      card.addEventListener("click", function () {
+        if (state.selectMode) {
+          toggleSelectNote(n.id);
+        } else {
+          openEditor(n);
+        }
+      });
       grid.appendChild(card);
     });
     holder.appendChild(grid);
+  }
+
+  function toggleSelectNote(id) {
+    var idx = state.selectedIds.indexOf(id);
+    if (idx === -1) state.selectedIds.push(id);
+    else state.selectedIds.splice(idx, 1);
+    renderList();
+  }
+
+  function deleteSelectedNotes() {
+    var ids = state.selectedIds.slice();
+    if (ids.length === 0) return;
+    var removed = state.notes.filter(function (n) { return ids.indexOf(n.id) !== -1; });
+    state.notes = state.notes.filter(function (n) { return ids.indexOf(n.id) === -1; });
+    state.selectMode = false;
+    state.selectedIds = [];
+    persist();
+    renderList();
+
+    var count = removed.length;
+    showUndoToast(count + "개 카드를 삭제했어요", function () {
+      state.notes = state.notes.concat(removed);
+      persist();
+      renderList();
+    });
   }
 
   function createProject(name) {
