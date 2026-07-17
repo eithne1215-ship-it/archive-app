@@ -1,4 +1,4 @@
-var CACHE_NAME = "archive-cache-v2";
+var CACHE_NAME = "archive-cache-v4";
 var CORE_ASSETS = [
   "./",
   "./index.html",
